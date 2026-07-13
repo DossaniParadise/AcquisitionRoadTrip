@@ -80,7 +80,7 @@ select:focus-visible,.btn:focus-visible{outline:2px solid var(--focus)}
 tr.conflict td{box-shadow:inset 3px 0 0 var(--warn)}
 .conflict-note{color:var(--warn);font-size:11px;margin-top:3px;margin-left:26px}
 .drive-row td{background:transparent;color:var(--muted);font-size:11px;font-style:italic;padding:3px 10px 3px 40px;border-bottom:1px dashed var(--line)}
-.filler-row td{background:repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(255,255,255,.02) 6px,rgba(255,255,255,.02) 12px);border-bottom:1px solid var(--line);height:44px;padding:8px 10px}
+.filler-row td{background:repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(255,255,255,.02) 6px,rgba(255,255,255,.02) 12px);border-bottom:1px solid var(--line)}
 .filler-row{opacity:.5}
 .daysplit td{background:linear-gradient(90deg,rgba(229,181,58,.22),transparent);font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--hotel);padding:4px 10px}
 .maplink{color:var(--focus);text-decoration:none;font-size:11px;font-weight:600}
@@ -379,30 +379,43 @@ function buildTables(){
   block.appendChild(grid);
   host.appendChild(block);
 
-  // Align the "Day 2" divider horizontally: pad the shorter Day 1 section with
-  // empty filler rows so both dividers sit at the same vertical row.
-  alignDaySplit(cardA,cardB);
-
   wireInputs();
   enableSort();
   applyView(STATE.view);
+  // Align the "Day 2" divider on an absolute horizontal line across both cards.
+  // Measured in pixels after layout, so it's exact regardless of differing row heights.
+  requestAnimationFrame(()=>alignDaySplit(cardA,cardB));
 }
 
-// Pad the shorter Day 1 section with empty filler rows so the "Day 2" divider
-// lines up horizontally across both group cards (for clean side-by-side screenshots).
+// Give each card's Day-1 section the SAME pixel height by inserting one spacer row
+// (sized to the difference) before the shorter card's "Day 2" divider. Because the
+// header + hotel bar are identical height in both cards, matching the Day-1 tbody
+// span puts both "Day 2" rows on the same absolute line.
 function alignDaySplit(cardA,cardB){
-  const a=cardA._day1Rows||0, b=cardB._day1Rows||0;
-  if(a===b) return;
-  const shorter = a<b ? cardA : cardB;
-  const diff = Math.abs(a-b);
-  const tb = shorter.querySelector('tbody');
-  const split = tb.querySelector('tr[data-daysplit]');
-  for(let k=0;k<diff;k++){
-    const filler=document.createElement('tr');
-    filler.className='filler-row'; filler.setAttribute('aria-hidden','true');
-    filler.innerHTML='<td colspan="5">&nbsp;</td>';
-    if(split) tb.insertBefore(filler,split); else tb.appendChild(filler);
-  }
+  // remove any prior spacer so re-alignment is idempotent
+  [cardA,cardB].forEach(c=>{ const f=c.querySelector('.filler-row'); if(f) f.remove(); });
+  const measure = c=>{
+    const split=c.querySelector('tr[data-daysplit]');
+    const body=c.querySelector('tbody');
+    if(!split) return null;
+    // height from top of tbody to top of the daysplit row
+    return split.offsetTop - body.offsetTop;
+  };
+  const hA=measure(cardA), hB=measure(cardB);
+  if(hA==null||hB==null) return;
+  if(Math.abs(hA-hB)<1) return;
+  const shorter = hA<hB ? cardA : cardB;
+  const gap = Math.abs(hA-hB);
+  const split = shorter.querySelector('tr[data-daysplit]');
+  const filler=document.createElement('tr');
+  filler.className='filler-row'; filler.setAttribute('aria-hidden','true');
+  filler.innerHTML=`<td colspan="5" style="height:${gap}px;padding:0"></td>`;
+  split.parentNode.insertBefore(filler,split);
+}
+
+function realign(){
+  const cards=document.querySelectorAll('.card[data-group]');
+  if(cards.length>=2) alignDaySplit(cards[0],cards[1]);
 }
 
 function escapeHtml(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
@@ -716,6 +729,8 @@ function boot(){
   document.getElementById('viewSelect').value=STATE.view||'all';
   updatePlanUI();
   redraw();
+  let rzTimer=null;
+  window.addEventListener('resize',()=>{ clearTimeout(rzTimer); rzTimer=setTimeout(realign,150); });
 }
 boot();
 </script>
