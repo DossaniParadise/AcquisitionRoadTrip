@@ -45,8 +45,33 @@ select:focus-visible,.btn:focus-visible{outline:2px solid var(--focus)}
 .status{font-size:12px;color:var(--muted);margin:6px 2px 0}
 .dayblock{margin:6px 0 20px}
 .dayblock-title{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:4px 2px;border-bottom:1px solid var(--line);margin-bottom:12px}
+/* Schedule columns. Default: two side-by-side columns. */
 .daygrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-@media(max-width:860px){.daygrid{grid-template-columns:1fr}}
+
+/* PORTRAIT on narrow screens: stack for readability (one column). */
+@media (max-width:860px) and (orientation:portrait){
+  .daygrid{grid-template-columns:1fr}
+}
+
+/* LANDSCAPE (incl. phones): always keep the two columns side by side.
+   If the screen is too narrow to fit both comfortably, allow the whole
+   schedule area to scroll horizontally instead of stacking, so the
+   side-by-side view is preserved for screenshots. */
+@media (orientation:landscape){
+  #schedules{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .daygrid{grid-template-columns:1fr 1fr}
+}
+@media (orientation:landscape) and (max-width:900px){
+  .daygrid{min-width:860px} /* force both columns to stay usable; scroll if needed */
+  .tbl{font-size:12px}
+  .tbl td,.tbl th{padding:6px 7px}
+  #map{height:260px}
+}
+/* Rotate hint shown only on small portrait screens */
+.rotate-hint{display:none}
+@media (max-width:760px) and (orientation:portrait){
+  .rotate-hint{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0 0 12px;font-size:12px;color:var(--muted)}
+}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px}
 .card h2{margin:0;padding:12px 14px;font-size:14px;font-weight:700;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
 .hotelbar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel2);font-size:12px}
@@ -75,6 +100,14 @@ select:focus-visible,.btn:focus-visible{outline:2px solid var(--focus)}
 .drag-handle:active{cursor:grabbing}
 .k-home td{background:rgba(31,157,85,.14)}
 .k-hotel td{background:rgba(229,181,58,.14)}
+.k-lunch td{background:rgba(150,120,220,.16)}
+.lunch-row .stopname{color:#c9b6f2;font-weight:600}
+.lunchicon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-right:8px;flex:0 0 auto;font-size:13px}
+.durToggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.durBtn{background:var(--panel2);color:var(--muted);border:none;padding:3px 7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;font-variant-numeric:tabular-nums}
+.durBtn:hover{color:var(--ink)}
+.durBtn.on{background:var(--focus);color:#0a0a0a}
+.durBtn:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .k-a1 td{background:var(--a1-soft)} .k-a2 td{background:var(--a2-soft)}
 .k-b1 td{background:var(--b1-soft)} .k-b2 td{background:var(--b2-soft)}
 tr.conflict td{box-shadow:inset 3px 0 0 var(--warn)}
@@ -90,6 +123,18 @@ tr.conflict td{box-shadow:inset 3px 0 0 var(--warn)}
 .sortable-chosen{background:var(--panel2)}
 .sortable-drag{opacity:.9}
 @media(prefers-reduced-motion:no-preference){.flash{animation:fl 1s ease}}
+/* Mobile polish: larger tap targets, tighter chrome */
+@media (max-width:760px){
+  .wrap{padding:10px}
+  header.top h1{font-size:18px}
+  .toolbar{gap:8px}
+  select,.btn{padding:9px 12px}
+  .drag-handle{padding:0 10px 0 4px;font-size:16px}
+  .durBtn{padding:5px 9px}
+  .timeInput{width:80px;padding:6px 7px}
+  .sharedHotelWrap{width:100%}
+  .sharedHotelWrap input{min-width:0;flex:1 1 auto}
+}
 @keyframes fl{0%{background:rgba(124,196,255,.25)}100%{}}
 </style>
 </head>
@@ -113,6 +158,10 @@ tr.conflict td{box-shadow:inset 3px 0 0 var(--warn)}
     <span id="sharedHotelWrap" class="sharedHotelWrap" style="display:none">
       <label for="sharedHotelInput">Shared hotel</label>
       <input id="sharedHotelInput" placeholder="One hotel for both parties" aria-label="Shared hotel address">
+    </span>
+    <label>Visit</label>
+    <span class="durToggle" role="group" aria-label="Visit duration for all stores">
+      <button class="durBtn" id="durBtn45" data-visit="45">45 min</button><button class="durBtn" id="durBtn30" data-visit="30">30 min</button>
     </span>
     <label for="viewSelect">View</label>
     <select id="viewSelect" aria-label="Filter view">
@@ -143,6 +192,7 @@ tr.conflict td{box-shadow:inset 3px 0 0 var(--warn)}
     <div class="status" id="routeStatus">Loading road routes from OSRM&hellip;</div>
   </div>
 
+  <div class="rotate-hint">↻ Rotate your phone to landscape to see both groups side by side.</div>
   <div id="schedules"></div>
 </div>
 
@@ -155,7 +205,7 @@ const VISIT_MIN = 30;
 const DEFAULT_DAY_START = '8:00 AM';
 const COLORS = {a1:'#d64545',a2:'#e88fb0',b1:'#3b6fd4',b2:'#7fc0e8'};
 const KIND_COLOR = {home:'#1f9d55',hotel:'#e5b53a'};
-const STORAGE_KEY = 'storeSched.v4';
+const STORAGE_KEY = 'storeSched.v6';
 
 // ---------- state ----------
 // STATE = { plan:'separate'|'shared', dirty:bool, view, version, parties{gk:{...}}, sharedHotelAddr }
@@ -168,8 +218,32 @@ function stateFromPreset(planKey){
   s.plan = planKey;
   s.dirty = false;
   s.sharedHotelAddr = PRESETS.sharedHotelAddr;
+  s.visitMin = 45;   // global visit duration for ALL stores (45 default, toggle to 30)
   if(!s.view) s.view='all';
+  for(const gk of ['groupA','groupB']){
+    ensureLunch(s.parties[gk], gk);
+  }
   return s;
+}
+// Insert one 30-min lunch break at the mid-point of Day 1 (before the hotel),
+// if the party doesn't already have one. It's a normal draggable stop (kind:'lunch').
+function ensureLunch(P, gk){
+  if(P.stops.some(st=>st.kind==='lunch')) return;
+  const h = P.stops.findIndex(st=>st.kind==='hotel');
+  const day1End = h<0 ? P.stops.length : h; // hotel index (exclusive of hotel)
+  // day-1 store indices are 1..day1End-1 (0 is home). Pick the middle store.
+  const firstStore=1, lastStore=day1End-1;
+  if(lastStore < firstStore) return;
+  const midStore = Math.floor((firstStore+lastStore)/2);
+  // place lunch AFTER the mid store
+  const insertAt = midStore+1;
+  const anchor = P.stops[midStore]; // co-locate lunch at the mid store's coordinates
+  const lunch = {
+    name:'Lunch break', addr:'30-minute lunch',
+    lat:anchor.lat, lng:anchor.lng, kind:'lunch',
+    _id: gk+'_lunch'
+  };
+  P.stops.splice(insertAt,0,lunch);
 }
 function freshState(){
   // Default plan = separate hotels (the reviewed & approved arrangement).
@@ -190,6 +264,8 @@ function load(){
     if(!s.plan) s.plan='separate';
     if(s.dirty===undefined) s.dirty=false;
     if(!s.sharedHotelAddr) s.sharedHotelAddr=PRESETS.sharedHotelAddr;
+    // back-compat: make sure durations + lunch exist
+    if(typeof s.visitMin!=='number') s.visitMin=45;
     return s;
   }catch(e){ return null; }
 }
@@ -267,10 +343,12 @@ function computeParty(P){
   for(let i=0;i<n;i++){
     const s=stops[i];
     const day = h<0?1:(i<=h?1:2);
-    const dm = (prev && day===prevDay) ? driveMin(prev,s) : 0; // no drive carry across day boundary start
+    // A lunch break is a pause in place: no travel time into or out of it.
+    const isBreak = s.kind==='lunch';
+    const prevWasBreak = prev && prev.kind==='lunch';
+    const dm = (prev && day===prevDay && !isBreak && !prevWasBreak) ? driveMin(prev,s) : 0;
     let earliest;
     if(i===0 || day!==prevDay){
-      // first stop of a day
       earliest = P.dayStart[day];
     } else {
       earliest = out[i-1].depart + dm;
@@ -283,9 +361,9 @@ function computeParty(P){
     } else {
       arrive = earliest;
     }
-    const dur=(s.kind==='store')?VISIT_MIN:0;
+    const dur = s.kind==='store' ? (STATE.visitMin||45) : (s.kind==='lunch' ? 30 : 0);
     const depart=arrive+dur;
-    out.push({arrive,depart,dur,pinned,conflict,drive:(day===prevDay?dm:null),earliest,day});
+    out.push({arrive,depart,dur,pinned,conflict,drive:(day===prevDay && !isBreak && !prevWasBreak?dm:null),earliest,day});
     prev=s; prevDay=day;
   }
   return out;
@@ -326,10 +404,11 @@ function buildTables(){
     let dayShown=0;
     let day1Rows=0;      // count of rendered <tr> in the Day 1 section (stops + drive rows)
     let inDay1=true;
+    let dispNum=0;       // sequential number shown on stops (skips lunch breaks)
     P.stops.forEach((s,i)=>{
       const t=times[i];
       const ck=groupColorKey(gk,t.day);
-      // day-2 divider once, right at the hotel row transition
+      // drive row (skipped for lunch breaks, which are pauses in place)
       if(i>0 && t.drive!=null){
         const dr=document.createElement('tr'); dr.className='drive-row';
         dr.innerHTML=`<td colspan="5">↓ drive ${Math.round(t.drive)} min${driveCache[legKey(P.stops[i-1],s)]==null?' (est)':''} to next</td>`;
@@ -342,23 +421,45 @@ function buildTables(){
         tb.appendChild(ds);
         dayShown=2; inDay1=false;
       } else if(t.day===1 && dayShown<1){ dayShown=1; }
+
+      const pinTitle=t.pinned?'Pinned — click ✕ to clear':'Type a time to pin this stop';
+      const timeCell=`<td class="td-time"><span class="timeCell">
+          <input class="timeInput${t.pinned?' isPinned':''}" value="${fmt(t.arrive)}" data-edit="${gk}:${s._id}" inputmode="text" aria-label="Start time for ${escapeAttr(s.name)}" title="${pinTitle}">
+          ${t.pinned?`<button class="pinclear" data-clear="${gk}:${s._id}" title="Clear pinned time" aria-label="Clear pinned time">✕</button>`:''}
+        </span></td>`;
+
+      if(s.kind==='lunch'){
+        const tr=document.createElement('tr');
+        tr.className='k-lunch lunch-row'+(t.pinned?' pinned':'');
+        tr.dataset.id=s._id; tr.dataset.idx=i;
+        tr.innerHTML=`
+          <td><span class="drag-handle" title="Drag to move the lunch break">⠿</span></td>
+          ${timeCell}
+          <td class="td-time">${fmt(t.depart)}</td>
+          <td class="td-dur">30 min</td>
+          <td>
+            <div class="stopname"><span class="lunchicon">🍽</span><span>Lunch break</span></div>
+            <div class="stopmeta">30-minute break &middot; drag to move</div>
+          </td>`;
+        tb.appendChild(tr);
+        if(inDay1) day1Rows++;
+        return;
+      }
+
+      dispNum++;
       const rowClass=s.kind==='home'?'k-home':s.kind==='hotel'?'k-hotel':('k-'+ck);
       const tr=document.createElement('tr');
       tr.className=rowClass+(t.pinned?' pinned':'')+(t.conflict?' conflict':'');
       tr.dataset.id=s._id; tr.dataset.idx=i;
       const col=s.kind==='home'?KIND_COLOR.home:s.kind==='hotel'?KIND_COLOR.hotel:COLORS[ck];
       const gq=encodeURIComponent(s.addr);
-      const pinTitle=t.pinned?'Pinned — click ✕ to clear':'Type a time to pin this stop';
       tr.innerHTML=`
         <td><span class="drag-handle" title="Drag to reorder">⠿</span></td>
-        <td class="td-time"><span class="timeCell">
-          <input class="timeInput${t.pinned?' isPinned':''}" value="${fmt(t.arrive)}" data-edit="${gk}:${s._id}" inputmode="text" aria-label="Start time for ${escapeAttr(s.name)}" title="${pinTitle}">
-          ${t.pinned?`<button class="pinclear" data-clear="${gk}:${s._id}" title="Clear pinned time" aria-label="Clear pinned time">✕</button>`:''}
-        </span></td>
+        ${timeCell}
         <td class="td-time">${fmt(t.depart)}</td>
         <td class="td-dur">${t.dur?fmtDur(t.dur):'—'}</td>
         <td>
-          <div class="stopname"><span class="stopnum" style="background:${col}">${i+1}</span><span>${escapeHtml(s.name)}</span>${t.pinned?'<span class="tag-pin">pinned</span>':''}</div>
+          <div class="stopname"><span class="stopnum" style="background:${col}">${dispNum}</span><span>${escapeHtml(s.name)}</span>${t.pinned?'<span class="tag-pin">pinned</span>':''}</div>
           <div class="stopmeta">${escapeHtml(s.addr)} &middot; <a class="maplink" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${gq}">map</a></div>
           ${t.conflict?`<div class="conflict-note">⚠ Arrives before you could leave the previous stop (feasible ~${fmt(t.earliest)}). Kept as entered.</div>`:''}
         </td>`;
@@ -527,13 +628,16 @@ function drawMap(){
                           : L.polyline([[a.lat,a.lng],[b.lat,b.lng]],{color:COLORS[ck],weight:3,opacity:.5,dashArray:'6 6'});
       line.addTo(layerGroups[gk+'_day'+day]);
     }
+    let dispNum=0;
     P.stops.forEach((s,i)=>{
+      if(s.kind==='lunch') return; // lunch is a pause in place, not a map location
+      dispNum++;
       const day=times[i].day, ck=groupColorKey(gk,day);
       const col=s.kind==='home'?KIND_COLOR.home:s.kind==='hotel'?KIND_COLOR.hotel:COLORS[ck];
       bounds.push([s.lat,s.lng]);
-      const icon=L.divIcon({className:'',html:`<div class="mapnum" style="background:${col}">${i+1}</div>`,iconSize:[22,22],iconAnchor:[11,11]});
+      const icon=L.divIcon({className:'',html:`<div class="mapnum" style="background:${col}">${dispNum}</div>`,iconSize:[22,22],iconAnchor:[11,11]});
       L.marker([s.lat,s.lng],{icon,zIndexOffset:s.kind==='store'?0:1000})
-        .bindPopup(`<b>${i+1}. ${escapeHtml(s.name)}</b><br>${escapeHtml(s.addr)}<br><i>${escapeHtml(P.label.replace(/ \(.*\)/,''))} · Day ${day}</i>`)
+        .bindPopup(`<b>${dispNum}. ${escapeHtml(s.name)}</b><br>${escapeHtml(s.addr)}<br><i>${escapeHtml(P.label.replace(/ \(.*\)/,''))} · Day ${day}</i>`)
         .addTo(layerGroups[gk+'_day'+day]);
     });
   }
@@ -654,7 +758,7 @@ function importState(file){
       if(!s||!s.parties) throw new Error('bad file');
       if(!s.plan) s.plan='separate'; if(s.dirty===undefined) s.dirty=false;
       if(!s.sharedHotelAddr) s.sharedHotelAddr=PRESETS.sharedHotelAddr;
-      STATE=s; save(); redraw(); updatePlanUI();
+      STATE=s; save(); redraw(); updatePlanUI(); updateVisitUI();
       const st=document.getElementById('saveState'); if(st){st.textContent='Imported';st.style.color='var(--home)';}
     }catch(e){ alert('That file could not be read as a saved schedule.'); }
   };
@@ -674,9 +778,10 @@ function switchPlan(planKey){
       return;
     }
   }
-  const keepView=STATE.view, keepSharedHotel=STATE.sharedHotelAddr;
+  const keepView=STATE.view, keepSharedHotel=STATE.sharedHotelAddr, keepVisit=STATE.visitMin;
   STATE=stateFromPreset(planKey);
   STATE.view=keepView;
+  if(typeof keepVisit==='number') STATE.visitMin=keepVisit;
   // carry a previously-set shared hotel address into the shared plan
   if(planKey==='shared' && keepSharedHotel){
     STATE.sharedHotelAddr=keepSharedHotel;
@@ -685,7 +790,7 @@ function switchPlan(planKey){
       if(hi>=0){ P.stops[hi].addr=keepSharedHotel; P.hotelAddr=keepSharedHotel; }
     }
   }
-  save(); redraw(); updatePlanUI();
+  save(); redraw(); updatePlanUI(); updateVisitUI();
 }
 function updatePlanUI(){
   const planSel=document.getElementById('planSelect'); if(planSel) planSel.value=STATE.plan;
@@ -695,12 +800,25 @@ function updatePlanUI(){
   if(shInput) shInput.value = STATE.sharedHotelAddr || '';
 }
 
+function updateVisitUI(){
+  const v=STATE.visitMin||45;
+  const b45=document.getElementById('durBtn45'), b30=document.getElementById('durBtn30');
+  if(b45) b45.classList.toggle('on', v===45);
+  if(b30) b30.classList.toggle('on', v===30);
+}
+
 // ---------- boot ----------
 function boot(){
   STATE = load() || freshState();
   // wire toolbar
   document.getElementById('viewSelect').addEventListener('change',e=>applyView(e.target.value));
   document.getElementById('planSelect').addEventListener('change',e=>switchPlan(e.target.value));
+  document.querySelectorAll('button[data-visit]').forEach(b=>{
+    b.addEventListener('click',e=>{
+      STATE.visitMin=parseInt(e.target.dataset.visit,10);
+      markDirty(); save(); updateVisitUI(); redraw();
+    });
+  });
   document.getElementById('sharedHotelInput').addEventListener('change',e=>{
     const addr=e.target.value.trim();
     STATE.sharedHotelAddr=addr;
@@ -723,11 +841,12 @@ function boot(){
   document.getElementById('importFile').addEventListener('change',e=>{ if(e.target.files[0]) importState(e.target.files[0]); e.target.value=''; });
   document.getElementById('btnReset').addEventListener('click',()=>{
     if(confirm('Reset everything to the original routes? This clears all your changes on this browser.')){
-      STATE=freshState(); save(); redraw(); updatePlanUI();
+      STATE=freshState(); save(); redraw(); updatePlanUI(); updateVisitUI();
     }
   });
   document.getElementById('viewSelect').value=STATE.view||'all';
   updatePlanUI();
+  updateVisitUI();
   redraw();
   let rzTimer=null;
   window.addEventListener('resize',()=>{ clearTimeout(rzTimer); rzTimer=setTimeout(realign,150); });
