@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Store Visit Schedule</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{
+  --bg:#0f1720; --panel:#16212e; --panel2:#1c2a3a; --line:#28384a;
+  --ink:#e8eef5; --muted:#8fa3b8;
+  --home:#1f9d55; --home-ink:#0a3a1f;
+  --hotel:#e5b53a; --hotel-ink:#4a3800;
+  --a1:#d64545; --a1-soft:#3a1a1c;   /* Group A day1 red */
+  --a2:#e88fb0; --a2-soft:#3a2027;   /* Group A day2 pink */
+  --b1:#3b6fd4; --b1-soft:#16233f;   /* Group B day1 royal blue */
+  --b2:#7fc0e8; --b2-soft:#16303f;   /* Group B day2 light blue */
+  --focus:#7cc4ff; --warn:#f0a860;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:1400px;margin:0 auto;padding:16px}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;padding:8px 4px 14px;border-bottom:1px solid var(--line)}
+header.top h1{font-size:20px;margin:0;font-weight:700;letter-spacing:-.01em}
+header.top .sub{color:var(--muted);font-size:13px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.controls button{
+  background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+  padding:8px 12px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600
+}
+.controls button.active{outline:2px solid var(--focus);background:var(--panel)}
+.controls button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media(max-width:960px){.layout{grid-template-columns:1fr}}
+#map{height:520px;border-radius:12px;border:1px solid var(--line);z-index:0}
+@media(max-width:960px){#map{height:340px}}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 4px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.swatch{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid rgba(255,255,255,.15)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px}
+.card h2{margin:0;padding:12px 14px;font-size:14px;font-weight:700;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl .td-time{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
+.tbl .td-dur{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums}
+.timeCell{display:inline-flex;align-items:center;gap:4px}
+.timeInput{width:74px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:13px;font-variant-numeric:tabular-nums}
+.timeInput:focus-visible{outline:2px solid var(--focus)}
+.timeInput.isPinned{border-color:var(--focus);box-shadow:inset 0 0 0 1px var(--focus);font-weight:700}
+.pinclear{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:2px 3px;border-radius:4px}
+.pinclear:hover{color:var(--ink);background:var(--line)}
+.pinclear:focus-visible{outline:2px solid var(--focus)}
+.tag-pin{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--focus);border:1px solid var(--focus);border-radius:20px;padding:0 6px;margin-left:8px}
+tr.conflict td{box-shadow:inset 3px 0 0 var(--warn,#e5843a)}
+.conflict-note{color:var(--warn,#f0a860);font-size:11px;margin-top:3px;margin-left:19px}
+.pin{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:8px;flex:0 0 auto;border:1px solid rgba(0,0,0,.35)}
+.stopname{display:flex;align-items:center}
+.stopmeta{color:var(--muted);font-size:11px;margin-top:2px;margin-left:19px}
+.k-home td{background:var(--home-soft,rgba(31,157,85,.14))}
+.k-hotel td{background:rgba(229,181,58,.14)}
+.k-a1 td{background:var(--a1-soft)} .k-a2 td{background:var(--a2-soft)}
+.k-b1 td{background:var(--b1-soft)} .k-b2 td{background:var(--b2-soft)}
+.drive-row td{background:transparent;color:var(--muted);font-size:11px;font-style:italic;padding:3px 10px 3px 40px;border-bottom:1px dashed var(--line)}
+.status{font-size:12px;color:var(--muted);margin:6px 2px 0}
+.maplink{color:var(--focus);text-decoration:none;font-size:11px;font-weight:600}
+.maplink:hover{text-decoration:underline}
+.hint{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:6px 0 14px}
+.reset{background:transparent;border:1px solid var(--line);color:var(--muted);font-size:11px;padding:3px 8px;border-radius:6px;cursor:pointer}
+.reset:hover{color:var(--ink)}
+@media(prefers-reduced-motion:no-preference){.flash{animation:fl 1s ease}}
+@keyframes fl{0%{background:rgba(124,196,255,.25)}100%{}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Store Visit Schedule</h1>
+    <span class="sub">Two-day field routes &middot; 30 min per store &middot; live drive times</span>
+  </header>
+
+  <div class="hint">
+    Type a time (e.g. <b>10:30</b> or <b>10:30 AM</b>) at <b>any</b> stop to pin it &mdash; everything after reflows, earlier stops stay put. Use it to re-anchor mid-day when you&rsquo;re running behind. Pinned stops show a badge; click <b>✕</b> to unpin, or <b>Reset times</b> to clear a whole day. Each store gets 30 min plus live drive time. Changes stay in this browser tab only.
+  </div>
+
+  <div class="controls" id="viewControls">
+    <button data-view="all" class="active">All routes</button>
+    <button data-view="groupA">Group A only</button>
+    <button data-view="groupB">Group B only</button>
+    <button data-view="day1">Day 1 only</button>
+    <button data-view="day2">Day 2 only</button>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div id="map"></div>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--a1)"></i>Group A &middot; Day 1</span>
+        <span><i class="swatch" style="background:var(--a2)"></i>Group A &middot; Day 2</span>
+        <span><i class="swatch" style="background:var(--b1)"></i>Group B &middot; Day 1</span>
+        <span><i class="swatch" style="background:var(--b2)"></i>Group B &middot; Day 2</span>
+        <span><i class="swatch" style="background:var(--home)"></i>Home base</span>
+        <span><i class="swatch" style="background:var(--hotel)"></i>Hotel</span>
+      </div>
+      <div class="status" id="routeStatus">Loading road routes from OSRM&hellip;</div>
+    </div>
+    <div id="schedules"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const ITIN = {"groupA": {"label": "Group A \u2014 AL & Husain (Grapevine)", "day1": {"colorKey": "a1", "stops": [{"name": "DPM Office (Grapevine)", "addr": "520 E Northwest Hwy Ste 100, Grapevine, TX 76051", "lat": 32.9405059, "lng": -97.0722817, "kind": "home"}, {"name": "Copperas Cove", "addr": "1001 East Highway 190, Copperas Cove, TX 76522", "lat": 31.1204224, "lng": -97.8931716, "kind": "store"}, {"name": "Clear Creek (Killeen)", "addr": "2902 Clear Creek, Killeen, TX 76549", "lat": 31.1081186, "lng": -97.8010413, "kind": "store"}, {"name": "West Stan (Killeen)", "addr": "1105 W. Stan Schlueter Loop, Killeen, TX 76549", "lat": 31.0800779, "lng": -97.7616618, "kind": "store"}, {"name": "Fort Hood (Killeen)", "addr": "1029 S Fort Hood St, Killeen, TX 76541", "lat": 31.1117404, "lng": -97.7471337, "kind": "store"}, {"name": "Rancier (Killeen)", "addr": "505 East Rancier, Killeen, TX 76541", "lat": 31.1252523, "lng": -97.7228155, "kind": "store"}, {"name": "Stan (Killeen)", "addr": "3809 E. Stan Schlueter Loop, Killeen, TX 76542", "lat": 31.0719884, "lng": -97.7095775, "kind": "store"}, {"name": "Harker Heights", "addr": "680 E Knights Way, Harker Heights, TX 76548", "lat": 31.0587236, "lng": -97.661126, "kind": "store"}, {"name": "Belton", "addr": "206 N. IH-35 Belton, TX 76513", "lat": 31.0215065, "lng": -97.4769954, "kind": "store"}, {"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}]}, "day2": {"colorKey": "a2", "stops": [{"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}, {"name": "Temple 31st", "addr": "2110 S. 31st St Suite 120, Temple, TX 76504", "lat": 31.0801639, "lng": -97.3659744, "kind": "store"}, {"name": "North Temple", "addr": "4405 N. General Bruce Drive, Temple, TX 76501", "lat": 31.1406888, "lng": -97.3278837, "kind": "store"}, {"name": "Hewitt (Waco)", "addr": "1601 Hewitt Drive, Waco, TX 76712", "lat": 31.4813032, "lng": -97.2080858, "kind": "store"}, {"name": "New Road (Waco)", "addr": "2401 S. New Road, Waco, TX 76711", "lat": 31.5082489, "lng": -97.144856, "kind": "store"}, {"name": "Valley Mills (Waco)", "addr": "1210 N. Valley Mills Dr., Waco, TX 76710", "lat": 31.530439, "lng": -97.1886823, "kind": "store"}, {"name": "Lakeshore (Waco)", "addr": "103 E. Loop 340, Waco, TX 76705", "lat": 31.603975, "lng": -97.107982, "kind": "store"}, {"name": "DPM Office (Grapevine)", "addr": "520 E Northwest Hwy Ste 100, Grapevine, TX 76051", "lat": 32.9405059, "lng": -97.0722817, "kind": "home"}]}}, "groupB": {"label": "Group B (Plano)", "day1": {"colorKey": "b1", "stops": [{"name": "Plano Coit", "addr": "2009 Coit Rd, Plano, TX 75075", "lat": 33.0283818, "lng": -96.7707069, "kind": "home"}, {"name": "Canton", "addr": "575 E State Highway 243, Canton, TX 75103", "lat": 32.5450543, "lng": -95.8557903, "kind": "store"}, {"name": "Athens", "addr": "1004 East Tyler St, Athens, TX 75751", "lat": 32.2052538, "lng": -95.8383086, "kind": "store"}, {"name": "Palestine", "addr": "2901 S. Loop 256, Palestine, TX 75801", "lat": 31.7340322, "lng": -95.6258271, "kind": "store"}, {"name": "Jacksonville", "addr": "505 East Rusk St, Jacksonville, TX 75766", "lat": 31.964, "lng": -95.2669, "kind": "store"}, {"name": "Crockett", "addr": "940 E Loop 304, Crockett, TX 75835", "lat": 31.3274505, "lng": -95.4397698, "kind": "store"}, {"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}]}, "day2": {"colorKey": "b2", "stops": [{"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}, {"name": "Waskom", "addr": "825 Spur 156, Waskom, TX 75692", "lat": 32.4697287, "lng": -94.0562723, "kind": "store"}, {"name": "Eastman (Longview)", "addr": "3306 S. Eastman Rd, Longview, TX 75602", "lat": 32.4517169, "lng": -94.7078858, "kind": "store"}, {"name": "Marshall (Longview)", "addr": "701 W. Marshall Ave, Longview, TX 75601", "lat": 32.5000234, "lng": -94.7499075, "kind": "store"}, {"name": "Loop 281 (Longview)", "addr": "1623 W. Loop 281, Longview, TX 75604", "lat": 32.5270918, "lng": -94.7799441, "kind": "store"}, {"name": "McCann (Longview)", "addr": "3511 McCann Rd, Longview, TX 75605", "lat": 32.5398472, "lng": -94.7548195, "kind": "store"}, {"name": "Plano Coit", "addr": "2009 Coit Rd, Plano, TX 75075", "lat": 33.0283818, "lng": -96.7707069, "kind": "home"}]}}};
+const VISIT_MIN = 30;                 // minutes at each store
+const COLORS = {a1:'#d64545',a2:'#e88fb0',b1:'#3b6fd4',b2:'#7fc0e8'};
+const KIND_COLOR = {home:'#1f9d55',hotel:'#e5b53a'};
+const DAY_DEFAULT_START = {day1:'8:00 AM', day2:'8:00 AM'};
+
+// ---------- time helpers ----------
+function parseTime(str){
+  if(!str) return null;
+  str = str.trim().toUpperCase().replace(/\./g,'');
+  let m = str.match(/^(\d{1,2}):?(\d{2})?\s*(AM|PM)?$/);
+  if(!m) return null;
+  let h = parseInt(m[1],10), min = m[2]?parseInt(m[2],10):0, ap = m[3];
+  if(min>59||h>23) return null;
+  if(ap==='PM' && h<12) h+=12;
+  if(ap==='AM' && h===12) h=0;
+  if(!ap && h<7) h+=12; // bare "1:00"-"6:59" assumed afternoon for field work
+  return h*60+min;
+}
+function fmt(mins){
+  mins=Math.round(mins);
+  mins=((mins%1440)+1440)%1440;
+  let h=Math.floor(mins/60), m=mins%60, ap=h>=12?'PM':'AM';
+  let h12=h%12; if(h12===0)h12=12;
+  return h12+':'+String(m).padStart(2,'0')+' '+ap;
+}
+function fmtDur(mins){
+  if(mins==null) return '—';
+  let h=Math.floor(mins/60), m=Math.round(mins%60);
+  return h>0 ? (h+':'+String(m).padStart(2,'0')) : (m+' min');
+}
+
+// ---------- build leg list ----------
+// each day: stops[]; drive[i] = minutes from stop i-1 to stop i (drive[0]=null)
+function eachDay(cb){
+  for(const gk of ['groupA','groupB'])
+    for(const dk of ['day1','day2'])
+      cb(gk,dk,ITIN[gk][dk]);
+}
+
+// ---------- OSRM routing ----------
+async function osrmRoute(a,b){
+  const url=`https://router.project-osrm.org/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
+  const r=await fetch(url); if(!r.ok) throw new Error('osrm '+r.status);
+  const j=await r.json();
+  if(!j.routes||!j.routes[0]) throw new Error('no route');
+  return {min:j.routes[0].duration/60, coords:j.routes[0].geometry.coordinates.map(c=>[c[1],c[0]])};
+}
+function haversineMin(a,b){ // fallback ~45mph avg
+  const R=3959,toR=x=>x*Math.PI/180;
+  const dLat=toR(b.lat-a.lat),dLng=toR(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2;
+  const mi=R*2*Math.asin(Math.sqrt(s));
+  return (mi/45)*60;
+}
+
+// ---------- map ----------
+const map=L.map('map',{scrollWheelZoom:true}).setView([32.0,-96.0],7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OpenStreetMap',maxZoom:18}).addTo(map);
+const layerGroups={}; // key -> L.layerGroup
+const allBounds=[];
+
+function stopColor(s,dayKey){
+  if(s.kind==='home') return KIND_COLOR.home;
+  if(s.kind==='hotel') return KIND_COLOR.hotel;
+  return COLORS[dayKey];
+}
+
+// ---------- render schedule tables ----------
+// Each stop can carry a manual arrival override in day._override[i] (minutes, or null).
+// A typed time PINS that stop; only stops AFTER it reflow. Earlier stops keep their
+// own arrivals (from earlier overrides or the natural flow up to the last anchor).
+// If a pinned arrival is earlier than the previous stop could realistically be left,
+// that stop is flagged as a conflict.
+function scheduleReflow(day){
+  const stops=day.stops, n=stops.length;
+  const ov=day._override || new Array(n).fill(null);
+  let out=[];
+  let t=null;              // running clock (departure of previous stop)
+  for(let i=0;i<n;i++){
+    const dm=(i>0)?(day._drive[i]??haversineMin(stops[i-1],stops[i])):0;
+    const earliest=(i===0)?null:(out[i-1].depart+dm); // earliest feasible arrival
+    let arrive, pinned=false, conflict=false;
+    if(ov[i]!=null){
+      arrive=ov[i]; pinned=true;
+      if(earliest!=null && arrive<earliest-0.5) conflict=true; // arrives before feasible
+    } else if(i===0){
+      arrive=parseTime(DAY_DEFAULT_START[day._dayKey]); // fallback day start
+    } else {
+      arrive=earliest;
+    }
+    const dur=(stops[i].kind==='store')?VISIT_MIN:0;
+    const depart=arrive+dur;
+    out.push({arrive,depart,dur,pinned,conflict,drive:dm,earliest});
+    t=depart;
+  }
+  return out;
+}
+
+function buildTables(){
+  const host=document.getElementById('schedules');
+  host.innerHTML='';
+  const groupMeta={
+    groupA:{day1:'a1',day2:'a2'},
+    groupB:{day1:'b1',day2:'b2'}
+  };
+  for(const gk of ['groupA','groupB']){
+    for(const dk of ['day1','day2']){
+      const day=ITIN[gk][dk];
+      const ck=groupMeta[gk][dk];
+      const card=document.createElement('div');
+      card.className='card'; card.dataset.group=gk; card.dataset.day=dk;
+      const times=scheduleReflow(day);
+      const endTime=times.length?fmt(times[times.length-1].depart):'';
+      card.innerHTML=`
+        <h2>
+          <span>${ITIN[gk].label.replace(/ \(.*\)/,'')} &middot; ${dk==='day1'?'Day 1':'Day 2'}</span>
+          <span style="display:flex;gap:8px;align-items:center">
+            <span class="badge" style="background:${COLORS[ck]};color:#0a0a0a">${day.stops.filter(s=>s.kind==='store').length} stores</span>
+            <button class="reset" data-reset="${gk}:${dk}" title="Clear all pinned times for this day">Reset times</button>
+          </span>
+        </h2>
+        <table class="tbl">
+          <thead><tr><th>Start</th><th>End</th><th>Dur</th><th>Store Location</th></tr></thead>
+          <tbody></tbody>
+        </table>`;
+      const tb=card.querySelector('tbody');
+      day.stops.forEach((s,i)=>{
+        // drive row (except before first)
+        if(i>0){
+          const dm=day._drive[i];
+          const dr=document.createElement('tr'); dr.className='drive-row';
+          dr.innerHTML=`<td colspan="4">↓ drive ${dm==null?'~'+Math.round(haversineMin(day.stops[i-1],s))+' min (est)':Math.round(dm)+' min'} to next</td>`;
+          tb.appendChild(dr);
+        }
+        const rowClass = s.kind==='home'?'k-home':s.kind==='hotel'?'k-hotel':('k-'+ck);
+        const tr=document.createElement('tr');
+        tr.className=rowClass+(times[i].pinned?' pinned':'')+(times[i].conflict?' conflict':'');
+        tr.dataset.idx=i;
+        const col=stopColor(s,ck);
+        const gq=encodeURIComponent(s.addr);
+        const pinTitle=times[i].pinned?'Pinned time — click ✕ to clear':'Type a time to pin this stop';
+        tr.innerHTML=`
+          <td class="td-time">
+            <span class="timeCell">
+              <input class="timeInput${times[i].pinned?' isPinned':''}" value="${fmt(times[i].arrive)}"
+                     data-edit="${gk}:${dk}:${i}" inputmode="text"
+                     aria-label="Start time for ${s.name}" title="${pinTitle}">
+              ${times[i].pinned?`<button class="pinclear" data-clear="${gk}:${dk}:${i}" title="Clear pinned time" aria-label="Clear pinned time for ${s.name}">✕</button>`:''}
+            </span>
+          </td>
+          <td class="td-time">${fmt(times[i].depart)}</td>
+          <td class="td-dur">${times[i].dur?fmtDur(times[i].dur):'—'}</td>
+          <td>
+            <div class="stopname"><i class="pin" style="background:${col}"></i><span>${s.name}</span>${times[i].pinned?'<span class="tag-pin">pinned</span>':''}</div>
+            <div class="stopmeta">${s.addr} &middot; <a class="maplink" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${gq}">map</a></div>
+            ${times[i].conflict?`<div class="conflict-note">⚠ Arrives before you could leave the previous stop (feasible ~${fmt(times[i].earliest)}). Time kept as entered.</div>`:''}
+          </td>`;
+        tb.appendChild(tr);
+      });
+      host.appendChild(card);
+    }
+  }
+  // wire inputs: typing a time pins THAT stop (override); only later stops reflow
+  host.querySelectorAll('input[data-edit]').forEach(inp=>{
+    inp.addEventListener('change',e=>{
+      const [gk,dk,idxs]=e.target.dataset.edit.split(':');
+      const idx=+idxs, day=ITIN[gk][dk];
+      const v=parseTime(e.target.value);
+      if(v==null){ // invalid: revert to current computed value
+        e.target.classList.add('flash');
+        e.target.value=fmt(scheduleReflow(day)[idx].arrive);
+        return;
+      }
+      day._override[idx]=v;
+      buildTables();
+    });
+    inp.addEventListener('focus',e=>e.target.select());
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); }});
+  });
+  host.querySelectorAll('button[data-clear]').forEach(b=>{
+    b.addEventListener('click',e=>{
+      const [gk,dk,idxs]=e.target.dataset.clear.split(':');
+      ITIN[gk][dk]._override[+idxs]=null;
+      buildTables();
+    });
+  });
+  host.querySelectorAll('button[data-reset]').forEach(b=>{
+    b.addEventListener('click',e=>{
+      const [gk,dk]=e.target.dataset.reset.split(':');
+      const day=ITIN[gk][dk];
+      day._override=new Array(day.stops.length).fill(null);
+      buildTables();
+    });
+  });
+  applyView(currentView);
+}
+
+// ---------- view filter ----------
+let currentView='all';
+function applyView(view){
+  currentView=view;
+  document.querySelectorAll('#viewControls button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  // tables
+  document.querySelectorAll('.card[data-group]').forEach(c=>{
+    const g=c.dataset.group,d=c.dataset.day;
+    let show=true;
+    if(view==='groupA')show=(g==='groupA');
+    else if(view==='groupB')show=(g==='groupB');
+    else if(view==='day1')show=(d==='day1');
+    else if(view==='day2')show=(d==='day2');
+    c.style.display=show?'':'none';
+  });
+  // map layers
+  Object.entries(layerGroups).forEach(([key,lg])=>{
+    const g=key.startsWith('groupA')?'groupA':'groupB';
+    const d=key.includes('day1')?'day1':'day2';
+    let show=true;
+    if(view==='groupA')show=(g==='groupA');
+    else if(view==='groupB')show=(g==='groupB');
+    else if(view==='day1')show=(d==='day1');
+    else if(view==='day2')show=(d==='day2');
+    if(show){ if(!map.hasLayer(lg))lg.addTo(map);} else {map.removeLayer(lg);}
+  });
+}
+document.querySelectorAll('#viewControls button').forEach(b=>{
+  b.addEventListener('click',()=>applyView(b.dataset.view));
+});
+
+// ---------- init: draw markers immediately, then fetch routes ----------
+function drawMarkers(){
+  const groupMeta={groupA:{day1:'a1',day2:'a2'},groupB:{day1:'b1',day2:'b2'}};
+  eachDay((gk,dk,day)=>{
+    const key=gk+'_'+dk;
+    const lg=L.layerGroup(); layerGroups[key]=lg; lg.addTo(map);
+    const ck=groupMeta[gk][dk];
+    day.stops.forEach((s,i)=>{
+      const col=stopColor(s,ck);
+      allBounds.push([s.lat,s.lng]);
+      const mk=L.circleMarker([s.lat,s.lng],{radius:s.kind==='store'?6:8,
+        color:'#0a0a0a',weight:1,fillColor:col,fillOpacity:1});
+      mk.bindPopup(`<b>${s.name}</b><br>${s.addr}<br><i>${ITIN[gk].label.replace(/ \(.*\)/,'')} · ${dk==='day1'?'Day 1':'Day 2'}</i>`);
+      mk.addTo(lg);
+    });
+  });
+  if(allBounds.length) map.fitBounds(allBounds,{padding:[30,30]});
+}
+
+async function fetchRoutes(){
+  const status=document.getElementById('routeStatus');
+  let ok=0,fail=0,total=0;
+  const groupMeta={groupA:{day1:'a1',day2:'a2'},groupB:{day1:'b1',day2:'b2'}};
+  const jobs=[];
+  eachDay((gk,dk,day)=>{
+    day._drive=new Array(day.stops.length).fill(null);
+    for(let i=1;i<day.stops.length;i++){ total++; jobs.push({gk,dk,day,i}); }
+  });
+  // sequential-ish with small concurrency to be nice to public OSRM
+  for(const job of jobs){
+    const {gk,dk,day,i}=job;
+    const a=day.stops[i-1],b=day.stops[i];
+    try{
+      const r=await osrmRoute(a,b);
+      day._drive[i]=r.min;
+      const ck=groupMeta[gk][dk];
+      L.polyline(r.coords,{color:COLORS[ck],weight:4,opacity:.85}).addTo(layerGroups[gk+'_'+dk]);
+      ok++;
+    }catch(err){
+      day._drive[i]=haversineMin(a,b);
+      const ck=groupMeta[gk][dk];
+      L.polyline([[a.lat,a.lng],[b.lat,b.lng]],{color:COLORS[ck],weight:3,opacity:.5,dashArray:'6 6'}).addTo(layerGroups[gk+'_'+dk]);
+      fail++;
+    }
+    status.textContent=`Road routes: ${ok}/${total} loaded${fail?` (${fail} estimated)`:''}…`;
+    buildTables(); // live update times as legs resolve
+  }
+  status.textContent = fail
+    ? `Routes loaded. ${fail} leg(s) used straight-line estimates (dashed) — OSRM public server was unavailable for those.`
+    : `All ${ok} road legs loaded with live OSRM drive times.`;
+}
+
+// boot
+eachDay((gk,dk,day)=>{
+  day._dayKey=dk;
+  day._override=new Array(day.stops.length).fill(null);
+  day._drive=new Array(day.stops.length).fill(null);
+});
+drawMarkers();
+buildTables();
+fetchRoutes();
+</script>
+</body>
+</html>
