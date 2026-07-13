@@ -35,10 +35,15 @@ header.top .sub{color:var(--muted);font-size:13px}
 }
 .controls button.active{outline:2px solid var(--focus);background:var(--panel)}
 .controls button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
-@media(max-width:960px){.layout{grid-template-columns:1fr}}
-#map{height:520px;border-radius:12px;border:1px solid var(--line);z-index:0}
+.maprow{margin:14px 0}
+#map{height:460px;border-radius:12px;border:1px solid var(--line);z-index:0}
 @media(max-width:960px){#map{height:340px}}
+/* two-column simultaneous schedule view */
+#schedules{display:block}
+.dayblock{margin:6px 0 20px}
+.dayblock-title{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:4px 2px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.daygrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media(max-width:860px){.daygrid{grid-template-columns:1fr}}
 .legend{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 4px;font-size:12px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .swatch{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid rgba(255,255,255,.15)}
@@ -62,6 +67,7 @@ header.top .sub{color:var(--muted);font-size:13px}
 tr.conflict td{box-shadow:inset 3px 0 0 var(--warn,#e5843a)}
 .conflict-note{color:var(--warn,#f0a860);font-size:11px;margin-top:3px;margin-left:19px}
 .pin{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:8px;flex:0 0 auto;border:1px solid rgba(0,0,0,.35)}
+.stopnum{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;margin-right:8px;flex:0 0 auto;font-size:11px;font-weight:700;color:#0a0a0a;border:1px solid rgba(0,0,0,.35);font-variant-numeric:tabular-nums}
 .stopname{display:flex;align-items:center}
 .stopmeta{color:var(--muted);font-size:11px;margin-top:2px;margin-left:19px}
 .k-home td{background:var(--home-soft,rgba(31,157,85,.14))}
@@ -72,6 +78,7 @@ tr.conflict td{box-shadow:inset 3px 0 0 var(--warn,#e5843a)}
 .status{font-size:12px;color:var(--muted);margin:6px 2px 0}
 .maplink{color:var(--focus);text-decoration:none;font-size:11px;font-weight:600}
 .maplink:hover{text-decoration:underline}
+.mapnum{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0a0a0a;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5);font-family:"Inter",sans-serif;font-variant-numeric:tabular-nums}
 .hint{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:6px 0 14px}
 .reset{background:transparent;border:1px solid var(--line);color:var(--muted);font-size:11px;padding:3px 8px;border-radius:6px;cursor:pointer}
 .reset:hover{color:var(--ink)}
@@ -98,26 +105,24 @@ tr.conflict td{box-shadow:inset 3px 0 0 var(--warn,#e5843a)}
     <button data-view="day2">Day 2 only</button>
   </div>
 
-  <div class="layout">
-    <div>
-      <div id="map"></div>
-      <div class="legend">
-        <span><i class="swatch" style="background:var(--a1)"></i>Group A &middot; Day 1</span>
-        <span><i class="swatch" style="background:var(--a2)"></i>Group A &middot; Day 2</span>
-        <span><i class="swatch" style="background:var(--b1)"></i>Group B &middot; Day 1</span>
-        <span><i class="swatch" style="background:var(--b2)"></i>Group B &middot; Day 2</span>
-        <span><i class="swatch" style="background:var(--home)"></i>Home base</span>
-        <span><i class="swatch" style="background:var(--hotel)"></i>Hotel</span>
-      </div>
-      <div class="status" id="routeStatus">Loading road routes from OSRM&hellip;</div>
+  <div class="maprow">
+    <div id="map"></div>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--a1)"></i>Group A &middot; Day 1</span>
+      <span><i class="swatch" style="background:var(--a2)"></i>Group A &middot; Day 2</span>
+      <span><i class="swatch" style="background:var(--b1)"></i>Group B &middot; Day 1</span>
+      <span><i class="swatch" style="background:var(--b2)"></i>Group B &middot; Day 2</span>
+      <span><i class="swatch" style="background:var(--home)"></i>Home base</span>
+      <span><i class="swatch" style="background:var(--hotel)"></i>Hotel</span>
     </div>
-    <div id="schedules"></div>
+    <div class="status" id="routeStatus">Loading road routes from OSRM&hellip;</div>
   </div>
+  <div id="schedules"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const ITIN = {"groupA": {"label": "Group A \u2014 AL & Husain (Grapevine)", "day1": {"colorKey": "a1", "stops": [{"name": "DPM Office (Grapevine)", "addr": "520 E Northwest Hwy Ste 100, Grapevine, TX 76051", "lat": 32.9405059, "lng": -97.0722817, "kind": "home"}, {"name": "Copperas Cove", "addr": "1001 East Highway 190, Copperas Cove, TX 76522", "lat": 31.1204224, "lng": -97.8931716, "kind": "store"}, {"name": "Clear Creek (Killeen)", "addr": "2902 Clear Creek, Killeen, TX 76549", "lat": 31.1081186, "lng": -97.8010413, "kind": "store"}, {"name": "West Stan (Killeen)", "addr": "1105 W. Stan Schlueter Loop, Killeen, TX 76549", "lat": 31.0800779, "lng": -97.7616618, "kind": "store"}, {"name": "Fort Hood (Killeen)", "addr": "1029 S Fort Hood St, Killeen, TX 76541", "lat": 31.1117404, "lng": -97.7471337, "kind": "store"}, {"name": "Rancier (Killeen)", "addr": "505 East Rancier, Killeen, TX 76541", "lat": 31.1252523, "lng": -97.7228155, "kind": "store"}, {"name": "Stan (Killeen)", "addr": "3809 E. Stan Schlueter Loop, Killeen, TX 76542", "lat": 31.0719884, "lng": -97.7095775, "kind": "store"}, {"name": "Harker Heights", "addr": "680 E Knights Way, Harker Heights, TX 76548", "lat": 31.0587236, "lng": -97.661126, "kind": "store"}, {"name": "Belton", "addr": "206 N. IH-35 Belton, TX 76513", "lat": 31.0215065, "lng": -97.4769954, "kind": "store"}, {"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}]}, "day2": {"colorKey": "a2", "stops": [{"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}, {"name": "Temple 31st", "addr": "2110 S. 31st St Suite 120, Temple, TX 76504", "lat": 31.0801639, "lng": -97.3659744, "kind": "store"}, {"name": "North Temple", "addr": "4405 N. General Bruce Drive, Temple, TX 76501", "lat": 31.1406888, "lng": -97.3278837, "kind": "store"}, {"name": "Hewitt (Waco)", "addr": "1601 Hewitt Drive, Waco, TX 76712", "lat": 31.4813032, "lng": -97.2080858, "kind": "store"}, {"name": "New Road (Waco)", "addr": "2401 S. New Road, Waco, TX 76711", "lat": 31.5082489, "lng": -97.144856, "kind": "store"}, {"name": "Valley Mills (Waco)", "addr": "1210 N. Valley Mills Dr., Waco, TX 76710", "lat": 31.530439, "lng": -97.1886823, "kind": "store"}, {"name": "Lakeshore (Waco)", "addr": "103 E. Loop 340, Waco, TX 76705", "lat": 31.603975, "lng": -97.107982, "kind": "store"}, {"name": "DPM Office (Grapevine)", "addr": "520 E Northwest Hwy Ste 100, Grapevine, TX 76051", "lat": 32.9405059, "lng": -97.0722817, "kind": "home"}]}}, "groupB": {"label": "Group B (Plano)", "day1": {"colorKey": "b1", "stops": [{"name": "Plano Coit", "addr": "2009 Coit Rd, Plano, TX 75075", "lat": 33.0283818, "lng": -96.7707069, "kind": "home"}, {"name": "Canton", "addr": "575 E State Highway 243, Canton, TX 75103", "lat": 32.5450543, "lng": -95.8557903, "kind": "store"}, {"name": "Athens", "addr": "1004 East Tyler St, Athens, TX 75751", "lat": 32.2052538, "lng": -95.8383086, "kind": "store"}, {"name": "Palestine", "addr": "2901 S. Loop 256, Palestine, TX 75801", "lat": 31.7340322, "lng": -95.6258271, "kind": "store"}, {"name": "Jacksonville", "addr": "505 East Rusk St, Jacksonville, TX 75766", "lat": 31.964, "lng": -95.2669, "kind": "store"}, {"name": "Crockett", "addr": "940 E Loop 304, Crockett, TX 75835", "lat": 31.3274505, "lng": -95.4397698, "kind": "store"}, {"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}]}, "day2": {"colorKey": "b2", "stops": [{"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}, {"name": "Waskom", "addr": "825 Spur 156, Waskom, TX 75692", "lat": 32.4697287, "lng": -94.0562723, "kind": "store"}, {"name": "Eastman (Longview)", "addr": "3306 S. Eastman Rd, Longview, TX 75602", "lat": 32.4517169, "lng": -94.7078858, "kind": "store"}, {"name": "Marshall (Longview)", "addr": "701 W. Marshall Ave, Longview, TX 75601", "lat": 32.5000234, "lng": -94.7499075, "kind": "store"}, {"name": "Loop 281 (Longview)", "addr": "1623 W. Loop 281, Longview, TX 75604", "lat": 32.5270918, "lng": -94.7799441, "kind": "store"}, {"name": "McCann (Longview)", "addr": "3511 McCann Rd, Longview, TX 75605", "lat": 32.5398472, "lng": -94.7548195, "kind": "store"}, {"name": "Plano Coit", "addr": "2009 Coit Rd, Plano, TX 75075", "lat": 33.0283818, "lng": -96.7707069, "kind": "home"}]}}};
+const ITIN = {"groupA": {"label": "Group A \u2014 Armaan & Usman (Grapevine)", "day1": {"colorKey": "a1", "stops": [{"name": "DPM Office (Grapevine)", "addr": "520 E Northwest Hwy Ste 100, Grapevine, TX 76051", "lat": 32.9405059, "lng": -97.0722817, "kind": "home"}, {"name": "Copperas Cove", "addr": "1001 East Highway 190, Copperas Cove, TX 76522", "lat": 31.1204224, "lng": -97.8931716, "kind": "store"}, {"name": "Clear Creek (Killeen)", "addr": "2902 Clear Creek, Killeen, TX 76549", "lat": 31.1081186, "lng": -97.8010413, "kind": "store"}, {"name": "West Stan (Killeen)", "addr": "1105 W. Stan Schlueter Loop, Killeen, TX 76549", "lat": 31.0800779, "lng": -97.7616618, "kind": "store"}, {"name": "Fort Hood (Killeen)", "addr": "1029 S Fort Hood St, Killeen, TX 76541", "lat": 31.1117404, "lng": -97.7471337, "kind": "store"}, {"name": "Rancier (Killeen)", "addr": "505 East Rancier, Killeen, TX 76541", "lat": 31.1252523, "lng": -97.7228155, "kind": "store"}, {"name": "Stan (Killeen)", "addr": "3809 E. Stan Schlueter Loop, Killeen, TX 76542", "lat": 31.0719884, "lng": -97.7095775, "kind": "store"}, {"name": "Harker Heights", "addr": "680 E Knights Way, Harker Heights, TX 76548", "lat": 31.0587236, "lng": -97.661126, "kind": "store"}, {"name": "Belton", "addr": "206 N. IH-35 Belton, TX 76513", "lat": 31.0215065, "lng": -97.4769954, "kind": "store"}, {"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}]}, "day2": {"colorKey": "a2", "stops": [{"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}, {"name": "Temple 31st", "addr": "2110 S. 31st St Suite 120, Temple, TX 76504", "lat": 31.0801639, "lng": -97.3659744, "kind": "store"}, {"name": "North Temple", "addr": "4405 N. General Bruce Drive, Temple, TX 76501", "lat": 31.1406888, "lng": -97.3278837, "kind": "store"}, {"name": "Hewitt (Waco)", "addr": "1601 Hewitt Drive, Waco, TX 76712", "lat": 31.4813032, "lng": -97.2080858, "kind": "store"}, {"name": "New Road (Waco)", "addr": "2401 S. New Road, Waco, TX 76711", "lat": 31.5082489, "lng": -97.144856, "kind": "store"}, {"name": "Valley Mills (Waco)", "addr": "1210 N. Valley Mills Dr., Waco, TX 76710", "lat": 31.530439, "lng": -97.1886823, "kind": "store"}, {"name": "Lakeshore (Waco)", "addr": "103 E. Loop 340, Waco, TX 76705", "lat": 31.603975, "lng": -97.107982, "kind": "store"}, {"name": "DPM Office (Grapevine)", "addr": "520 E Northwest Hwy Ste 100, Grapevine, TX 76051", "lat": 32.9405059, "lng": -97.0722817, "kind": "home"}]}}, "groupB": {"label": "Group B \u2014 Karim & Steve (Plano)", "day1": {"colorKey": "b1", "stops": [{"name": "Plano Coit", "addr": "2009 Coit Rd, Plano, TX 75075", "lat": 33.0283818, "lng": -96.7707069, "kind": "home"}, {"name": "Canton", "addr": "575 E State Highway 243, Canton, TX 75103", "lat": 32.5450543, "lng": -95.8557903, "kind": "store"}, {"name": "Athens", "addr": "1004 East Tyler St, Athens, TX 75751", "lat": 32.2052538, "lng": -95.8383086, "kind": "store"}, {"name": "Palestine", "addr": "2901 S. Loop 256, Palestine, TX 75801", "lat": 31.7340322, "lng": -95.6258271, "kind": "store"}, {"name": "Jacksonville", "addr": "505 East Rusk St, Jacksonville, TX 75766", "lat": 31.964, "lng": -95.2669, "kind": "store"}, {"name": "Crockett", "addr": "940 E Loop 304, Crockett, TX 75835", "lat": 31.3274505, "lng": -95.4397698, "kind": "store"}, {"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}]}, "day2": {"colorKey": "b2", "stops": [{"name": "Hotel Corsicana", "addr": "623 Bryant's Way, Corsicana, TX 75109", "lat": 32.0718587, "lng": -96.4417145, "kind": "hotel"}, {"name": "Waskom", "addr": "825 Spur 156, Waskom, TX 75692", "lat": 32.4697287, "lng": -94.0562723, "kind": "store"}, {"name": "Eastman (Longview)", "addr": "3306 S. Eastman Rd, Longview, TX 75602", "lat": 32.4517169, "lng": -94.7078858, "kind": "store"}, {"name": "Marshall (Longview)", "addr": "701 W. Marshall Ave, Longview, TX 75601", "lat": 32.5000234, "lng": -94.7499075, "kind": "store"}, {"name": "Loop 281 (Longview)", "addr": "1623 W. Loop 281, Longview, TX 75604", "lat": 32.5270918, "lng": -94.7799441, "kind": "store"}, {"name": "McCann (Longview)", "addr": "3511 McCann Rd, Longview, TX 75605", "lat": 32.5398472, "lng": -94.7548195, "kind": "store"}, {"name": "Plano Coit", "addr": "2009 Coit Rd, Plano, TX 75075", "lat": 33.0283818, "lng": -96.7707069, "kind": "home"}]}}};
 const VISIT_MIN = 30;                 // minutes at each store
 const COLORS = {a1:'#d64545',a2:'#e88fb0',b1:'#3b6fd4',b2:'#7fc0e8'};
 const KIND_COLOR = {home:'#1f9d55',hotel:'#e5b53a'};
@@ -224,62 +229,73 @@ function buildTables(){
     groupA:{day1:'a1',day2:'a2'},
     groupB:{day1:'b1',day2:'b2'}
   };
-  for(const gk of ['groupA','groupB']){
-    for(const dk of ['day1','day2']){
-      const day=ITIN[gk][dk];
-      const ck=groupMeta[gk][dk];
-      const card=document.createElement('div');
-      card.className='card'; card.dataset.group=gk; card.dataset.day=dk;
-      const times=scheduleReflow(day);
-      const endTime=times.length?fmt(times[times.length-1].depart):'';
-      card.innerHTML=`
-        <h2>
-          <span>${ITIN[gk].label.replace(/ \(.*\)/,'')} &middot; ${dk==='day1'?'Day 1':'Day 2'}</span>
-          <span style="display:flex;gap:8px;align-items:center">
-            <span class="badge" style="background:${COLORS[ck]};color:#0a0a0a">${day.stops.filter(s=>s.kind==='store').length} stores</span>
-            <button class="reset" data-reset="${gk}:${dk}" title="Clear all pinned times for this day">Reset times</button>
+
+  function makeCard(gk,dk){
+    const day=ITIN[gk][dk];
+    const ck=groupMeta[gk][dk];
+    const card=document.createElement('div');
+    card.className='card'; card.dataset.group=gk; card.dataset.day=dk;
+    const times=scheduleReflow(day);
+    const endTime=times.length?fmt(times[times.length-1].depart):'';
+    card.innerHTML=`
+      <h2>
+        <span>${ITIN[gk].label.replace(/ \(.*\)/,'')}</span>
+        <span style="display:flex;gap:8px;align-items:center">
+          <span class="badge" style="background:${COLORS[ck]};color:#0a0a0a">${day.stops.filter(s=>s.kind==='store').length} stores</span>
+          <button class="reset" data-reset="${gk}:${dk}" title="Clear all pinned times for this day">Reset times</button>
+        </span>
+      </h2>
+      <table class="tbl">
+        <thead><tr><th>Start</th><th>End</th><th>Dur</th><th>Store Location</th></tr></thead>
+        <tbody></tbody>
+      </table>`;
+    const tb=card.querySelector('tbody');
+    let stopNo=0; // sequential number across all stops in the day (incl. home/hotel)
+    day.stops.forEach((s,i)=>{
+      if(i>0){
+        const dm=day._drive[i];
+        const dr=document.createElement('tr'); dr.className='drive-row';
+        dr.innerHTML=`<td colspan="4">↓ drive ${dm==null?'~'+Math.round(haversineMin(day.stops[i-1],s))+' min (est)':Math.round(dm)+' min'} to next</td>`;
+        tb.appendChild(dr);
+      }
+      stopNo++;
+      const rowClass = s.kind==='home'?'k-home':s.kind==='hotel'?'k-hotel':('k-'+ck);
+      const tr=document.createElement('tr');
+      tr.className=rowClass+(times[i].pinned?' pinned':'')+(times[i].conflict?' conflict':'');
+      tr.dataset.idx=i;
+      const col=stopColor(s,ck);
+      const gq=encodeURIComponent(s.addr);
+      const pinTitle=times[i].pinned?'Pinned time — click ✕ to clear':'Type a time to pin this stop';
+      tr.innerHTML=`
+        <td class="td-time">
+          <span class="timeCell">
+            <input class="timeInput${times[i].pinned?' isPinned':''}" value="${fmt(times[i].arrive)}"
+                   data-edit="${gk}:${dk}:${i}" inputmode="text"
+                   aria-label="Start time for ${s.name}" title="${pinTitle}">
+            ${times[i].pinned?`<button class="pinclear" data-clear="${gk}:${dk}:${i}" title="Clear pinned time" aria-label="Clear pinned time for ${s.name}">✕</button>`:''}
           </span>
-        </h2>
-        <table class="tbl">
-          <thead><tr><th>Start</th><th>End</th><th>Dur</th><th>Store Location</th></tr></thead>
-          <tbody></tbody>
-        </table>`;
-      const tb=card.querySelector('tbody');
-      day.stops.forEach((s,i)=>{
-        // drive row (except before first)
-        if(i>0){
-          const dm=day._drive[i];
-          const dr=document.createElement('tr'); dr.className='drive-row';
-          dr.innerHTML=`<td colspan="4">↓ drive ${dm==null?'~'+Math.round(haversineMin(day.stops[i-1],s))+' min (est)':Math.round(dm)+' min'} to next</td>`;
-          tb.appendChild(dr);
-        }
-        const rowClass = s.kind==='home'?'k-home':s.kind==='hotel'?'k-hotel':('k-'+ck);
-        const tr=document.createElement('tr');
-        tr.className=rowClass+(times[i].pinned?' pinned':'')+(times[i].conflict?' conflict':'');
-        tr.dataset.idx=i;
-        const col=stopColor(s,ck);
-        const gq=encodeURIComponent(s.addr);
-        const pinTitle=times[i].pinned?'Pinned time — click ✕ to clear':'Type a time to pin this stop';
-        tr.innerHTML=`
-          <td class="td-time">
-            <span class="timeCell">
-              <input class="timeInput${times[i].pinned?' isPinned':''}" value="${fmt(times[i].arrive)}"
-                     data-edit="${gk}:${dk}:${i}" inputmode="text"
-                     aria-label="Start time for ${s.name}" title="${pinTitle}">
-              ${times[i].pinned?`<button class="pinclear" data-clear="${gk}:${dk}:${i}" title="Clear pinned time" aria-label="Clear pinned time for ${s.name}">✕</button>`:''}
-            </span>
-          </td>
-          <td class="td-time">${fmt(times[i].depart)}</td>
-          <td class="td-dur">${times[i].dur?fmtDur(times[i].dur):'—'}</td>
-          <td>
-            <div class="stopname"><i class="pin" style="background:${col}"></i><span>${s.name}</span>${times[i].pinned?'<span class="tag-pin">pinned</span>':''}</div>
-            <div class="stopmeta">${s.addr} &middot; <a class="maplink" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${gq}">map</a></div>
-            ${times[i].conflict?`<div class="conflict-note">⚠ Arrives before you could leave the previous stop (feasible ~${fmt(times[i].earliest)}). Time kept as entered.</div>`:''}
-          </td>`;
-        tb.appendChild(tr);
-      });
-      host.appendChild(card);
-    }
+        </td>
+        <td class="td-time">${fmt(times[i].depart)}</td>
+        <td class="td-dur">${times[i].dur?fmtDur(times[i].dur):'—'}</td>
+        <td>
+          <div class="stopname"><span class="stopnum" style="background:${col}">${stopNo}</span><span>${s.name}</span>${times[i].pinned?'<span class="tag-pin">pinned</span>':''}</div>
+          <div class="stopmeta">${s.addr} &middot; <a class="maplink" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${gq}">map</a></div>
+          ${times[i].conflict?`<div class="conflict-note">⚠ Arrives before you could leave the previous stop (feasible ~${fmt(times[i].earliest)}). Time kept as entered.</div>`:''}
+        </td>`;
+      tb.appendChild(tr);
+    });
+    return card;
+  }
+
+  for(const dk of ['day1','day2']){
+    const block=document.createElement('div');
+    block.className='dayblock'; block.dataset.dayblock=dk;
+    block.innerHTML=`<div class="dayblock-title">${dk==='day1'?'Day 1':'Day 2'}</div>`;
+    const grid=document.createElement('div'); grid.className='daygrid';
+    grid.appendChild(makeCard('groupA',dk));
+    grid.appendChild(makeCard('groupB',dk));
+    block.appendChild(grid);
+    host.appendChild(block);
   }
   // wire inputs: typing a time pins THAT stop (override); only later stops reflow
   host.querySelectorAll('input[data-edit]').forEach(inp=>{
@@ -331,6 +347,15 @@ function applyView(view){
     else if(view==='day2')show=(d==='day2');
     c.style.display=show?'':'none';
   });
+  // hide a whole day-block if both its cards are hidden (keeps the "Day 1/2" title tidy)
+  document.querySelectorAll('.dayblock').forEach(b=>{
+    const anyVisible=[...b.querySelectorAll('.card[data-group]')].some(c=>c.style.display!=='none');
+    b.style.display=anyVisible?'':'none';
+    // single-column when only one card shows, so the screenshot isn't half-empty
+    const grid=b.querySelector('.daygrid');
+    const visCards=[...b.querySelectorAll('.card[data-group]')].filter(c=>c.style.display!=='none').length;
+    if(grid) grid.style.gridTemplateColumns = visCards<=1 ? '1fr' : '';
+  });
   // map layers
   Object.entries(layerGroups).forEach(([key,lg])=>{
     const g=key.startsWith('groupA')?'groupA':'groupB';
@@ -357,9 +382,14 @@ function drawMarkers(){
     day.stops.forEach((s,i)=>{
       const col=stopColor(s,ck);
       allBounds.push([s.lat,s.lng]);
-      const mk=L.circleMarker([s.lat,s.lng],{radius:s.kind==='store'?6:8,
-        color:'#0a0a0a',weight:1,fillColor:col,fillOpacity:1});
-      mk.bindPopup(`<b>${s.name}</b><br>${s.addr}<br><i>${ITIN[gk].label.replace(/ \(.*\)/,'')} · ${dk==='day1'?'Day 1':'Day 2'}</i>`);
+      const num=i+1; // 1-based stop number for the day
+      const icon=L.divIcon({
+        className:'',
+        html:`<div class="mapnum" style="background:${col}">${num}</div>`,
+        iconSize:[22,22], iconAnchor:[11,11]
+      });
+      const mk=L.marker([s.lat,s.lng],{icon,zIndexOffset: s.kind==='store'?0:1000});
+      mk.bindPopup(`<b>${num}. ${s.name}</b><br>${s.addr}<br><i>${ITIN[gk].label.replace(/ \(.*\)/,'')} · ${dk==='day1'?'Day 1':'Day 2'}</i>`);
       mk.addTo(lg);
     });
   });
